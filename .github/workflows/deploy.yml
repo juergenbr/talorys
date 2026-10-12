@@ -1,0 +1,35 @@
+name: Deploy
+
+# Single-Worker deployment (agent + web UI) using apps/agent/wrangler.standalone.jsonc.
+# Worker secrets (OWNER_PASSWORD or OWNER_PASSWORD_HASH, SESSION_SECRET) are stored
+# in Cloudflare and survive deploys; set them once with `wrangler secret put`.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build -w @talorys/web
+      - name: Deploy Worker
+        working-directory: apps/agent
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy -c wrangler.standalone.jsonc
